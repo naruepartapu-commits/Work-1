@@ -1,0 +1,323 @@
+@page "/"
+@rendermode InteractiveServer
+@inject GameEngine Engine
+@implements IDisposable
+
+<PageTitle>Emberfall</PageTitle>
+
+<div class="stage">
+    <div class="stage-header">
+        <h1>EMBERFALL</h1>
+        <p class="subtitle">สมรภูมิเถ้าไฟ</p>
+    </div>
+
+    <div class="panel">
+
+        @if (Engine.Phase == GamePhase.MainMenu)
+        {
+            <div class="menu">
+                <p class="wins"><span class="wins-label">🏅 ชัยชนะรอบนี้</span><span>@Engine.Hero.Wins</span></p>
+                <button class="btn btn-primary btn-lg" @onclick="Engine.GoDifficultySelect"><span class="btn-ico">⚔️</span> ออกรบ</button>
+                <button class="btn" @onclick="Engine.GoBuildCharacter"><span class="btn-ico">🧝</span> ปรับแต่งตัวละคร</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.BuildCharacter)
+        {
+            <div class="build">
+                <h2>ปรับแต่งตัวละคร</h2>
+                <div class="stat-row">
+                    <span class="stat-label">🛡️ พลังป้องกัน (Def)</span>
+                    <button class="btn-icon" @onclick="Engine.DecreaseDef">−</button>
+                    <span class="stat-value">@Engine.Hero.Def <small>/ @Player.MaxDef</small></span>
+                    <button class="btn-icon" @onclick="Engine.IncreaseDef">+</button>
+                </div>
+                <div class="stat-pips" aria-hidden="true">
+                    @for (var i = 1; i <= Player.MaxDef; i++)
+                    {
+                        <span class="pip @(i <= Engine.Hero.Def ? "pip-on pip-def" : "")"></span>
+                    }
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">⚔️ พลังโจมตี (Atk)</span>
+                    <button class="btn-icon" @onclick="Engine.DecreaseAtk">−</button>
+                    <span class="stat-value">@Engine.Hero.Atk <small>/ @Player.MaxAtk</small></span>
+                    <button class="btn-icon" @onclick="Engine.IncreaseAtk">+</button>
+                </div>
+                <div class="stat-pips" aria-hidden="true">
+                    @for (var i = 1; i <= Player.MaxAtk; i++)
+                    {
+                        <span class="pip @(i <= Engine.Hero.Atk ? "pip-on pip-atk" : "")"></span>
+                    }
+                </div>
+                <p class="hint">Def ลดความเสียหายตอนตั้งการ์ด | Atk เพิ่มดาเมจโบนัสทุกครั้งที่โจมตี</p>
+                <button class="btn" @onclick="Engine.BackToMenu">↩ กลับเมนู</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.DifficultySelect)
+        {
+            <div class="menu">
+                <h2>เลือกระดับความยาก</h2>
+                <button class="btn btn-easy" @onclick='() => Engine.SelectDifficulty(Difficulty.Easy)'>
+                    <span class="btn-ico">🟢</span>
+                    <span class="btn-text"><strong>ง่าย</strong><small>สไลม์</small></span>
+                </button>
+                <button class="btn btn-normal" @onclick='() => Engine.SelectDifficulty(Difficulty.Normal)'>
+                    <span class="btn-ico">🪓</span>
+                    <span class="btn-text"><strong>ปานกลาง</strong><small>นักรบออร์ค</small></span>
+                </button>
+                <button class="btn btn-hard" @onclick='() => Engine.SelectDifficulty(Difficulty.Hard)'>
+                    <span class="btn-ico">🐉</span>
+                    <span class="btn-text"><strong>ยาก</strong><small>มังกรโบราณ</small></span>
+                </button>
+                <button class="btn" @onclick="Engine.BackToMenu">↩ กลับเมนู</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.Intro && Engine.Foe is not null)
+        {
+            <div class="intro">
+                <div class="intro-avatar">@FoeIcon(Engine.Foe.Name)</div>
+                <h2>@Engine.Foe.Name ปรากฏตัว!</h2>
+                <p class="flavor">@Engine.Foe.Intro</p>
+                <button class="btn btn-primary btn-lg" @onclick="Engine.ConfirmIntro">เริ่มการต่อสู้</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.Battle && Engine.Foe is not null)
+        {
+            <div class="battle">
+                <div class="combatant foe">
+                    <div class="combatant-top">
+                        <div class="avatar avatar-foe @(foeShake ? "shake" : "")">
+                            @FoeIcon(Engine.Foe.Name)
+                            @if (foeDmgValue is not null)
+                            {
+                                <span class="dmg-pop dmg-foe" @key="foeDmgKey">-@foeDmgValue</span>
+                            }
+                        </div>
+                        <div class="combatant-info">
+                            <div class="combatant-name">@Engine.Foe.Name</div>
+                            <div class="hp-bar @(HpPercent(Engine.Foe.Hp, Engine.Foe.MaxHp) <= 25 ? "hp-low" : "")"><div class="hp-fill foe-fill" style="width:@(HpPercent(Engine.Foe.Hp, Engine.Foe.MaxHp))%"></div></div>
+                            <div class="hp-text">@Math.Max(Engine.Foe.Hp, 0) / @Engine.Foe.MaxHp HP</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vs-divider"><span>VS</span></div>
+
+                <div class="combatant hero">
+                    <div class="combatant-top">
+                        <div class="avatar avatar-hero @(heroShake ? "shake" : "")">
+                            🧙
+                            @if (heroDmgValue is not null)
+                            {
+                                <span class="dmg-pop @(heroDmgIsHeal ? "dmg-heal" : "dmg-hero")" @key="heroDmgKey">@(heroDmgIsHeal ? "+" : "-")@heroDmgValue</span>
+                            }
+                        </div>
+                        <div class="combatant-info">
+                            <div class="combatant-name">คุณ</div>
+                            <div class="hp-bar @(HpPercent(Engine.Hero.Hp, Engine.Hero.MaxHp) <= 25 ? "hp-low" : "")"><div class="hp-fill hero-fill" style="width:@(HpPercent(Engine.Hero.Hp, Engine.Hero.MaxHp))%"></div></div>
+                            <div class="hp-text">@Math.Max(Engine.Hero.Hp, 0) / @Engine.Hero.MaxHp HP</div>
+                            <div class="cost-text">Cost : @Engine.Hero.Cost</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="log" aria-live="polite">
+                    @foreach (var entry in Engine.Log)
+                    {
+                        <p class="log-entry log-@entry.Kind.ToString().ToLowerInvariant()">@entry.Message</p>
+                    }
+                </div>
+
+                @if (Engine.ErrorMessage is not null)
+                {
+                    <p class="error">@Engine.ErrorMessage</p>
+                }
+
+                @if (!showSkills)
+                {
+                    <div class="actions">
+                        <div class="attack-picker">
+                            <label for="power">พลังโจมตี (1-20, ใช้ Cost เท่ากับตัวเลข)</label>
+                            <input id="power" type="range" min="1" max="20" @bind="attackPower" @bind:event="oninput" />
+                            <div class="power-row">
+                                <span>@attackPower</span>
+                                <button class="btn btn-primary" @onclick="DoAttack" disabled="@(attackPower > Engine.Hero.Cost)">โจมตี</button>
+                            </div>
+                        </div>
+                        <div class="action-row">
+                            <button class="btn" @onclick="() => showSkills = true">สกิล</button>
+                            <button class="btn" @onclick="Engine.Guard">ตั้งการ์ด (+7 Cost)</button>
+                            <button class="btn btn-danger" @onclick="Engine.Flee">หลบหนี</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="skills">
+                        <button class="btn skill-btn" @onclick='() => UseSkill("fireball")'>
+                            <span class="btn-text"><strong>Fireball</strong><small>13 ดาเมจ</small></span>
+                            <span class="cost-badge">10</span>
+                        </button>
+                        <button class="btn skill-btn" @onclick='() => UseSkill("heal")'>
+                            <span class="btn-text"><strong>Heal</strong><small>ฟื้นฟู 9 HP</small></span>
+                            <span class="cost-badge">13</span>
+                        </button>
+                        <button class="btn skill-btn" @onclick='() => UseSkill("magicball")'>
+                            <span class="btn-text"><strong>Magic Ball</strong><small>25 ดาเมจ</small></span>
+                            <span class="cost-badge">25</span>
+                        </button>
+                        <button class="btn skill-btn" @onclick='() => UseSkill("ultimate")'>
+                            <span class="btn-text"><strong>Ultimate Fireball</strong><small>35 ดาเมจ + สกัดตาศัตรู</small></span>
+                            <span class="cost-badge">40</span>
+                        </button>
+                        <button class="btn skill-btn" @onclick='() => UseSkill("poison")'>
+                            <span class="btn-text"><strong>Poison Strike</strong><small>5 ดาเมจ + พิษ 3 เทิร์น</small></span>
+                            <span class="cost-badge">15</span>
+                        </button>
+                        <button class="btn btn-mystery skill-btn" @onclick='() => UseSkill("unknownbook")'>
+                            <span class="btn-text"><strong>ตำราต้องห้าม</strong><small>???</small></span>
+                            <span class="cost-badge">100</span>
+                        </button>
+                        <button class="btn" @onclick="() => showSkills = false">↩ กลับ</button>
+                    </div>
+                }
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.Victory && Engine.Foe is not null)
+        {
+            <div class="result result-win">
+                <h2>ชนะแล้ว!</h2>
+                <p>คุณกำจัด @Engine.Foe.Name ได้สำเร็จ</p>
+                <div class="result-stats">
+                    <div class="result-stat"><span class="result-stat-label">ดาเมจรวม</span><span class="result-stat-value">@Engine.TotalDamageDealt</span></div>
+                    <div class="result-stat"><span class="result-stat-label">HP ที่เหลือ</span><span class="result-stat-value">@Math.Max(Engine.Hero.Hp, 0) / @Engine.Hero.MaxHp</span></div>
+                </div>
+                <button class="btn btn-primary btn-lg" @onclick="Engine.ReturnToMenu">กลับเมนูหลัก</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.Defeat)
+        {
+            <div class="result result-lose">
+                <h2>คุณพ่ายแพ้</h2>
+                <p>ลองปรับแต่งตัวละครแล้วมาใหม่อีกครั้ง</p>
+                <button class="btn btn-primary btn-lg" @onclick="Engine.ReturnToMenu">กลับเมนูหลัก</button>
+            </div>
+        }
+        else if (Engine.Phase == GamePhase.Fled)
+        {
+            <div class="result">
+                <h2>คุณหลบหนีออกมา</h2>
+                <button class="btn btn-primary btn-lg" @onclick="Engine.ReturnToMenu">กลับเมนูหลัก</button>
+            </div>
+        }
+
+    </div>
+</div>
+
+@code {
+    private int attackPower = 1;
+    private bool showSkills;
+
+    private int? prevFoeHp;
+    private int? prevHeroHp;
+
+    private bool foeShake;
+    private int? foeDmgValue;
+    private int foeDmgKey;
+
+    private bool heroShake;
+    private int? heroDmgValue;
+    private bool heroDmgIsHeal;
+    private int heroDmgKey;
+
+    protected override void OnInitialized()
+    {
+        Engine.OnChange += HandleChange;
+    }
+
+    private void HandleChange()
+    {
+        if (Engine.Phase != GamePhase.Battle)
+        {
+            showSkills = false;
+            prevFoeHp = Engine.Foe?.Hp;
+            prevHeroHp = Engine.Hero.Hp;
+        }
+        else
+        {
+            if (Engine.Foe is not null && prevFoeHp is int pf)
+            {
+                var diff = pf - Engine.Foe.Hp;
+                if (diff > 0)
+                {
+                    foeDmgValue = diff;
+                    foeDmgKey++;
+                    foeShake = true;
+                    _ = ResetAfter(450, () => foeShake = false);
+                }
+            }
+
+            if (prevHeroHp is int ph)
+            {
+                var diff = ph - Engine.Hero.Hp;
+                if (diff > 0)
+                {
+                    heroDmgValue = diff;
+                    heroDmgIsHeal = false;
+                    heroDmgKey++;
+                    heroShake = true;
+                    _ = ResetAfter(450, () => heroShake = false);
+                }
+                else if (diff < 0)
+                {
+                    heroDmgValue = -diff;
+                    heroDmgIsHeal = true;
+                    heroDmgKey++;
+                }
+            }
+
+            prevFoeHp = Engine.Foe?.Hp;
+            prevHeroHp = Engine.Hero.Hp;
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ResetAfter(int delayMs, Action mutate)
+    {
+        await Task.Delay(delayMs);
+        await InvokeAsync(() =>
+        {
+            mutate();
+            StateHasChanged();
+        });
+    }
+
+    private void DoAttack() => Engine.PlayerAttack(attackPower);
+
+    private void UseSkill(string id)
+    {
+        showSkills = false;
+        Engine.UseSkill(id);
+    }
+
+    private static int HpPercent(int current, int max)
+    {
+        if (max <= 0) return 0;
+        var pct = (int)Math.Round(100.0 * Math.Max(current, 0) / max);
+        return Math.Clamp(pct, 0, 100);
+    }
+
+    private static string FoeIcon(string name) => name switch
+    {
+        "สไลม์" => "🟢",
+        "นักรบออร์ค" => "🪓",
+        "มังกรโบราณ" => "🐉",
+        _ => "👹"
+    };
+
+    public void Dispose()
+    {
+        Engine.OnChange -= HandleChange;
+    }
+}
